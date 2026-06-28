@@ -1,33 +1,46 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Building, 
-  Copy, 
-  Check, 
-  Plus, 
-  Trash2, 
-  Edit3, 
-  Calendar, 
-  Share2, 
-  MapPin, 
-  Phone, 
-  Mail, 
-  Save, 
+import React, { useState, useEffect, use } from 'react';
+import {
+  Building,
+  Copy,
+  Check,
+  Plus,
+  Trash2,
+  Edit3,
+  Calendar,
+  Share2,
+  MapPin,
+  Phone,
+  Mail,
+  Save,
   ExternalLink,
   Info
 } from 'lucide-react';
+import { isAuthenticated, logout } from '../utils/auth';
+import { useNavigate } from 'react-router-dom';
 
 // Indian States list for dropdown
 const INDIAN_STATES = [
-  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", 
-  "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", 
-  "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram", 
-  "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", 
+  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
+  "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka",
+  "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram",
+  "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
   "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal",
   "Andaman and Nicobar Islands", "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu",
   "Delhi", "Jammu and Kashmir", "Ladakh", "Lakshadweep", "Puducherry"
 ];
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
+
+
+  const handleLogOut = () => {
+  logout();
+  showToast("Logged out successfully!", "success");
+
+  setTimeout(() => {
+    navigate("/login");
+  }, 1000);
+};
   // 1. Toast Notification State
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const showToast = (message, type = 'success') => {
@@ -75,12 +88,12 @@ export default function DashboardPage() {
 
     if (roomForm.id) {
       // Edit mode
-      setRooms(rooms.map(r => r.id === roomForm.id ? { 
-        ...r, 
-        name: roomForm.name, 
-        totalRooms: parseInt(roomForm.totalRooms), 
-        price: parseFloat(roomForm.price), 
-        mealType: roomForm.mealType 
+      setRooms(rooms.map(r => r.id === roomForm.id ? {
+        ...r,
+        name: roomForm.name,
+        totalRooms: parseInt(roomForm.totalRooms),
+        price: parseFloat(roomForm.price),
+        mealType: roomForm.mealType
       } : r));
       showToast("Room updated successfully!");
     } else {
@@ -191,7 +204,7 @@ export default function DashboardPage() {
 
     setBookings([newBooking, ...bookings]);
     showToast("Booking blocked successfully!");
-    
+
     // Reset booking form
     setBookingForm({
       guestName: '',
@@ -218,7 +231,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8 pb-16 max-w-7xl mx-auto">
-      
+
       {/* Toast popup */}
       {toast.show && (
         <div className="fixed top-4 right-4 z-50 flex items-center p-4 rounded-xl border shadow-lg bg-white transition-all duration-300 animate-slide-in">
@@ -239,7 +252,7 @@ export default function DashboardPage() {
             Property: <span className="font-semibold text-slate-800">{property.name || "Unnamed Property"}</span> &bull; {property.region}, {property.state}
           </p>
         </div>
-        
+
         <div className="flex items-center gap-3">
           <button
             onClick={handleCopyLink}
@@ -248,19 +261,25 @@ export default function DashboardPage() {
             {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4 text-slate-500" />}
             <span>Copy Public Link</span>
           </button>
-          
-          <div className="h-10 w-10 rounded-full bg-blue-600 text-white font-bold text-sm flex items-center justify-center border border-blue-500 shadow-sm">
+
+          <div
+            className="h-10 w-10 rounded-full bg-blue-600 text-white font-bold text-sm flex items-center justify-center border border-blue-500 shadow-sm cursor-pointer">
             OW
+          </div>
+          <div
+            onClick={handleLogOut}
+            className="h-10 min-w-20 rounded-full bg-red-600 text-white font-bold text-sm flex items-center justify-center border border-red-500 shadow-sm cursor-pointer hover:bg-red-500 active:bg-red-900">
+            Logout
           </div>
         </div>
       </div>
 
       {/* TWO COLUMN CONTENT LAYOUT */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+
         {/* LEFT COLUMN: Property & Setup forms */}
         <div className="lg:col-span-2 space-y-8">
-          
+
           {/* SECTION 1: Property Details */}
           <section className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs">
             <div className="flex items-center gap-3 pb-6 border-b border-slate-100 mb-6">
@@ -276,8 +295,8 @@ export default function DashboardPage() {
             <form onSubmit={handlePropertySave} className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Property Name</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={property.name}
                   onChange={(e) => setProperty({ ...property, name: e.target.value })}
                   className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
@@ -287,8 +306,8 @@ export default function DashboardPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Email ID</label>
-                <input 
-                  type="email" 
+                <input
+                  type="email"
                   value={property.email}
                   onChange={(e) => setProperty({ ...property, email: e.target.value })}
                   className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
@@ -298,8 +317,8 @@ export default function DashboardPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Contact Number</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={property.contact}
                   onChange={(e) => setProperty({ ...property, contact: e.target.value })}
                   className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
@@ -309,8 +328,8 @@ export default function DashboardPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">WhatsApp Number</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={property.whatsapp}
                   onChange={(e) => setProperty({ ...property, whatsapp: e.target.value })}
                   className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
@@ -319,7 +338,7 @@ export default function DashboardPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">State (India)</label>
-                <select 
+                <select
                   value={property.state}
                   onChange={(e) => setProperty({ ...property, state: e.target.value })}
                   className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
@@ -332,8 +351,8 @@ export default function DashboardPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Region / City</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={property.region}
                   onChange={(e) => setProperty({ ...property, region: e.target.value })}
                   className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
@@ -343,8 +362,8 @@ export default function DashboardPage() {
 
               <div className="md:col-span-2">
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Address</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={property.address}
                   onChange={(e) => setProperty({ ...property, address: e.target.value })}
                   className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
@@ -380,8 +399,8 @@ export default function DashboardPage() {
             <form onSubmit={handleAddOrUpdateRoom} className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Room Name</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="e.g. Deluxe Suite"
                   value={roomForm.name}
                   onChange={(e) => setRoomForm({ ...roomForm, name: e.target.value })}
@@ -391,8 +410,8 @@ export default function DashboardPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Number of Rooms</label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   placeholder="Total rooms of this type"
                   value={roomForm.totalRooms}
                   onChange={(e) => setRoomForm({ ...roomForm, totalRooms: e.target.value })}
@@ -403,8 +422,8 @@ export default function DashboardPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Price Per Night (₹)</label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   placeholder="Rate in INR"
                   value={roomForm.price}
                   onChange={(e) => setRoomForm({ ...roomForm, price: e.target.value })}
@@ -415,7 +434,7 @@ export default function DashboardPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Meal Type</label>
-                <select 
+                <select
                   value={roomForm.mealType}
                   onChange={(e) => setRoomForm({ ...roomForm, mealType: e.target.value })}
                   className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
@@ -497,7 +516,7 @@ export default function DashboardPage() {
 
         {/* RIGHT COLUMN: Block Rooms & Share Link */}
         <div className="space-y-8">
-          
+
           {/* SECTION 3: Block Room / Add Booking */}
           <section className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs">
             <div className="flex items-center gap-3 pb-6 border-b border-slate-100 mb-6">
@@ -513,8 +532,8 @@ export default function DashboardPage() {
             <form onSubmit={handleBlockRoom} className="space-y-5">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Guest Name</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="e.g. John Doe"
                   value={bookingForm.guestName}
                   onChange={(e) => setBookingForm({ ...bookingForm, guestName: e.target.value })}
@@ -525,8 +544,8 @@ export default function DashboardPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Guest Contact</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="Phone number"
                   value={bookingForm.guestContact}
                   onChange={(e) => setBookingForm({ ...bookingForm, guestContact: e.target.value })}
@@ -538,8 +557,8 @@ export default function DashboardPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Check-in Date</label>
-                  <input 
-                    type="date" 
+                  <input
+                    type="date"
                     value={bookingForm.checkIn}
                     onChange={(e) => setBookingForm({ ...bookingForm, checkIn: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
@@ -549,8 +568,8 @@ export default function DashboardPage() {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Nights</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     value={bookingForm.nights}
                     onChange={(e) => setBookingForm({ ...bookingForm, nights: Math.max(1, parseInt(e.target.value) || 1) })}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
@@ -562,8 +581,8 @@ export default function DashboardPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Checkout Date (Auto)</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={bookingForm.checkout || 'Select check-in...'}
                   disabled
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-500 select-none cursor-not-allowed font-medium"
@@ -573,7 +592,7 @@ export default function DashboardPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Room Type</label>
-                  <select 
+                  <select
                     value={bookingForm.roomType}
                     onChange={(e) => setBookingForm({ ...bookingForm, roomType: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
@@ -586,8 +605,8 @@ export default function DashboardPage() {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Rooms Booked</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     value={bookingForm.rooms}
                     onChange={(e) => setBookingForm({ ...bookingForm, rooms: Math.max(1, parseInt(e.target.value) || 1) })}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
@@ -599,7 +618,7 @@ export default function DashboardPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Notes (Optional)</label>
-                <textarea 
+                <textarea
                   placeholder="Special instructions..."
                   value={bookingForm.notes}
                   onChange={(e) => setBookingForm({ ...bookingForm, notes: e.target.value })}
@@ -687,11 +706,10 @@ export default function DashboardPage() {
                   <td className="py-4 text-slate-600 text-sm text-center font-medium">{b.nights}</td>
                   <td className="py-4 text-slate-600 text-sm text-center font-medium">{b.rooms}</td>
                   <td className="py-4 text-right">
-                    <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full border ${
-                      b.status === 'Active' 
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                        : 'bg-blue-50 text-blue-700 border-blue-200'
-                    }`}>
+                    <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full border ${b.status === 'Active'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-blue-50 text-blue-700 border-blue-200'
+                      }`}>
                       {b.status}
                     </span>
                   </td>

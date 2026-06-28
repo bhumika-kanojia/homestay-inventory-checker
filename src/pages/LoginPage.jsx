@@ -1,9 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { Home, CheckCircle2, ShieldAlert, KeyRound } from 'lucide-react';
-import { login } from '../utils/auth';
+import { isAuthenticated, login } from '../utils/auth';
 
 export default function LoginPage() {
+
+  if (isAuthenticated()) {
+    return <Navigate to="/dashboard" />
+  }
+
   const navigate = useNavigate();
   const [animate, setAnimate] = useState(false);
 
@@ -21,14 +26,14 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-sans overflow-hidden">
-      
+
       {/* LEFT SIDE: Brand & Showcase (Hidden on Mobile) */}
       <div className="hidden lg:flex lg:w-1/2 relative bg-slate-900 text-white flex-col justify-between p-12 overflow-hidden">
-        
+
         {/* Background Image with Dark Overlay */}
-        <div 
+        <div
           className="absolute inset-0 bg-cover bg-center z-0 scale-105 transition-transform duration-10000 ease-out"
-          style={{ 
+          style={{
             backgroundImage: "url('https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80')",
             filter: "brightness(0.35) contrast(1.05)"
           }}
@@ -43,9 +48,8 @@ export default function LoginPage() {
         </div>
 
         {/* Content area */}
-        <div className={`relative z-10 max-w-lg transition-all duration-1000 delay-100 ${
-          animate ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
-        }`}>
+        <div className={`relative z-10 max-w-lg transition-all duration-1000 delay-100 ${animate ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
+          }`}>
           <span className="inline-block bg-blue-500/20 backdrop-blur-md text-blue-300 text-xs font-semibold px-3 py-1 rounded-full border border-blue-400/25 mb-6 uppercase tracking-widest">
             Homestay Management
           </span>
@@ -81,15 +85,14 @@ export default function LoginPage() {
 
       {/* RIGHT SIDE: Authentication Card */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6 md:p-12 relative">
-        
+
         {/* Subtle decorative background glow */}
         <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-blue-200/20 rounded-full blur-3xl pointer-events-none" />
-        
+
         {/* Card */}
-        <div className={`w-full max-w-md bg-white border border-slate-100 rounded-2xl shadow-xl shadow-slate-100/40 p-8 md:p-10 relative z-10 transition-all duration-700 ease-out delay-200 ${
-          animate ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
-        }`}>
-          
+        <div className={`w-full max-w-md bg-white border border-slate-100 rounded-2xl shadow-xl shadow-slate-100/40 p-8 md:p-10 relative z-10 transition-all duration-700 ease-out delay-200 ${animate ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+          }`}>
+
           {/* Mobile Branding (Shows only on small screens) */}
           <div className="lg:hidden flex items-center justify-center space-x-2.5 mb-8">
             <div className="bg-blue-600 p-2 rounded-xl text-white">

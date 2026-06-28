@@ -7,17 +7,21 @@ import OwnerLayout from './layouts/OwnerLayout';
 import PublicLayout from './layouts/PublicLayout';
 
 export default function App() {
+
+
+
   return (
     <BrowserRouter>
       <Routes>
+        {/* Owner Authentication */}
+        <Route path="/login" element={<LoginPage />} />
+
         {/* Public Guest Property View */}
         <Route element={<PublicLayout />}>
           <Route path="/property/sunrise-homestay-coorg" element={<GuestPage />} />
           <Route path="/property/sunrise-homestay" element={<GuestPage />} />
         </Route>
 
-        {/* Owner Authentication */}
-        <Route path="/login" element={<LoginPage />} />
 
         {/* Protected Owner Dashboard */}
         <Route element={<OwnerLayout />}>
@@ -25,8 +29,8 @@ export default function App() {
         </Route>
 
         {/* Default Redirection */}
-        <Route path="/" element={<Navigate to="/property/sunrise-homestay" replace />} />
-        <Route path="*" element={<Navigate to="/property/sunrise-homestay" replace />} />
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
   );
