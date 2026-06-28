@@ -1,4 +1,4 @@
-import React, { useState, useEffect, use } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Building,
   Copy,
@@ -13,10 +13,22 @@ import {
   Mail,
   Save,
   ExternalLink,
-  Info
+  Info,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import { isAuthenticated, logout } from '../utils/auth';
 import { useNavigate } from 'react-router-dom';
+import {
+  getProperty,
+  saveProperty,
+  getRooms,
+  addRoom,
+  updateRoom,
+  deleteRoom,
+  getBookings,
+  createBooking
+} from '../utils/api';
 
 // Indian States list for dropdown
 const INDIAN_STATES = [
@@ -29,88 +41,230 @@ const INDIAN_STATES = [
   "Delhi", "Jammu and Kashmir", "Ladakh", "Lakshadweep", "Puducherry"
 ];
 
+// Map API room fields → local state fields
+function mapRoom(r) {
+  return {
+    id: r._id,
+    name: r.roomName,
+    totalRooms: r.totalRooms,
+    price: r.pricePerNight,
+    mealType: r.mealType
+  };
+}
+
+// Map API booking fields → local state fields
+function mapBooking(b) {
+  return {
+    id: b._id,
+    guestName: b.guestName,
+    contact: b.guestContact,
+    roomType: b.roomType,
+    checkIn: b.checkInDate ? b.checkInDate.split('T')[0] : '',
+    checkout: b.checkoutDate ? b.checkoutDate.split('T')[0] : '',
+    nights: b.nights,
+    rooms: b.roomsBooked,
+    status: b.status
+  };
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate();
 
-
-  const handleLogOut = () => {
-  logout();
-  showToast("Logged out successfully!", "success");
-
-  setTimeout(() => {
-    navigate("/login");
-  }, 1000);
-};
-  // 1. Toast Notification State
+  // ── Toast ──────────────────────────────────────────────────────────────────
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
     setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3000);
   };
 
-  // 2. Property Details State
+  // ── Property State ─────────────────────────────────────────────────────────
+  const [propertyId, setPropertyId] = useState(null);
+  const [propertyLoading, setPropertyLoading] = useState(true);
   const [property, setProperty] = useState({
-    name: "Sunrise Homestay",
-    contact: "+91 94482 10345",
-    whatsapp: "+91 94482 10345",
-    state: "Karnataka",
-    region: "Coorg",
-    address: "Misty Hills Estate, Madikeri",
-    email: "hello@sunrisehomestay.com",
+    name: '',
+    contact: '',
+    whatsapp: '',
+    state: 'Karnataka',
+    region: '',
+    address: '',
+    email: ''
   });
 
-  const handlePropertySave = (e) => {
-    e.preventDefault();
-    showToast("Property details saved successfully!", "success");
-  };
-
-  // 3. Room Setup State
-  const [rooms, setRooms] = useState([
-    { id: '1', name: 'Deluxe Room', totalRooms: 4, price: 2800, mealType: 'Breakfast Included' },
-    { id: '2', name: 'Standard Room', totalRooms: 3, price: 1800, mealType: 'Only Room' },
-    { id: '3', name: 'Cottage', totalRooms: 2, price: 3500, mealType: 'All Meals' },
-  ]);
+  // ── Rooms State ────────────────────────────────────────────────────────────
+  const [rooms, setRooms] = useState([]);
+  const [roomsLoading, setRoomsLoading] = useState(false);
 
   const [roomForm, setRoomForm] = useState({
-    id: null, // null for add mode, number for edit mode
+    id: null,
     name: '',
     totalRooms: '',
     price: '',
     mealType: 'Only Room'
   });
 
-  const handleAddOrUpdateRoom = (e) => {
+  // ── Bookings State ─────────────────────────────────────────────────────────
+  const [bookings, setBookings] = useState([]);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
+
+  const [bookingForm, setBookingForm] = useState({
+    guestName: '',
+    guestContact: '',
+    checkIn: '',
+    nights: 1,
+    checkout: '',
+    roomType: '',
+    roomId: '',
+    rooms: 1,
+    notes: ''
+  });
+
+  // ── Copied state ───────────────────────────────────────────────────────────
+  const [copied, setCopied] = useState(false);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ON MOUNT: Load property, then load rooms + bookings
+  // ══════════════════════════════════════════════════════════════════════════
+  useEffect(() => {
+    async function loadData() {
+      setPropertyLoading(true);
+      try {
+        const res = await getProperty('sunrise-homestay');
+        const p = res.data;
+        setPropertyId(p._id);
+        setProperty({
+          name: p.propertyName || '',
+          contact: p.contactNumber || '',
+          whatsapp: p.whatsappNumber || '',
+          state: p.state || 'Karnataka',
+          region: p.region || '',
+          address: p.address || '',
+          email: p.email || ''
+        });
+
+        // Load rooms and bookings in parallel
+        setRoomsLoading(true);
+        setBookingsLoading(true);
+
+        const [roomsRes, bookingsRes] = await Promise.allSettled([
+          getRooms(p._id),
+          getBookings(p._id)
+        ]);
+
+        if (roomsRes.status === 'fulfilled') {
+          const mappedRooms = roomsRes.value.data.map(mapRoom);
+          setRooms(mappedRooms);
+          // Set initial room type in booking form to first room
+          if (mappedRooms.length > 0) {
+            setBookingForm(prev => ({
+              ...prev,
+              roomType: mappedRooms[0].name,
+              roomId: mappedRooms[0].id
+            }));
+          }
+        }
+
+        if (bookingsRes.status === 'fulfilled') {
+          setBookings(bookingsRes.value.data.map(mapBooking));
+        }
+
+      } catch (err) {
+        showToast('Could not load property data. Is the backend running?', 'error');
+      } finally {
+        setPropertyLoading(false);
+        setRoomsLoading(false);
+        setBookingsLoading(false);
+      }
+    }
+
+    loadData();
+  }, []);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // AUTO-CALC checkout date
+  // ══════════════════════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (bookingForm.checkIn && bookingForm.nights > 0) {
+      const checkInDate = new Date(bookingForm.checkIn);
+      const checkoutDate = new Date(checkInDate.getTime() + bookingForm.nights * 24 * 60 * 60 * 1000);
+      const yyyy = checkoutDate.getFullYear();
+      const mm = String(checkoutDate.getMonth() + 1).padStart(2, '0');
+      const dd = String(checkoutDate.getDate()).padStart(2, '0');
+      setBookingForm(prev => ({ ...prev, checkout: `${yyyy}-${mm}-${dd}` }));
+    } else {
+      setBookingForm(prev => ({ ...prev, checkout: '' }));
+    }
+  }, [bookingForm.checkIn, bookingForm.nights]);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PROPERTY SAVE
+  // ══════════════════════════════════════════════════════════════════════════
+  const handlePropertySave = async (e) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        propertyName: property.name,
+        contactNumber: property.contact,
+        whatsappNumber: property.whatsapp,
+        state: property.state,
+        region: property.region,
+        address: property.address,
+        email: property.email,
+        slug: 'sunrise-homestay'
+      };
+      const res = await saveProperty(payload, propertyId);
+      if (!propertyId) setPropertyId(res.data._id);
+      showToast('Property details saved successfully!', 'success');
+    } catch (err) {
+      showToast(err.message || 'Failed to save property.', 'error');
+    }
+  };
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ROOM ADD / UPDATE
+  // ══════════════════════════════════════════════════════════════════════════
+  const handleAddOrUpdateRoom = async (e) => {
     e.preventDefault();
     if (!roomForm.name || !roomForm.totalRooms || !roomForm.price) {
-      showToast("Please fill in all room setup fields.", "error");
+      showToast('Please fill in all room setup fields.', 'error');
       return;
     }
 
-    if (roomForm.id) {
-      // Edit mode
-      setRooms(rooms.map(r => r.id === roomForm.id ? {
-        ...r,
-        name: roomForm.name,
-        totalRooms: parseInt(roomForm.totalRooms),
-        price: parseFloat(roomForm.price),
-        mealType: roomForm.mealType
-      } : r));
-      showToast("Room updated successfully!");
-    } else {
-      // Add mode
-      const newRoom = {
-        id: Date.now().toString(),
-        name: roomForm.name,
-        totalRooms: parseInt(roomForm.totalRooms),
-        price: parseFloat(roomForm.price),
-        mealType: roomForm.mealType
-      };
-      setRooms([...rooms, newRoom]);
-      showToast("Room setup added successfully!");
+    try {
+      if (roomForm.id) {
+        // Edit mode
+        const res = await updateRoom(roomForm.id, {
+          roomName: roomForm.name,
+          totalRooms: parseInt(roomForm.totalRooms),
+          pricePerNight: parseFloat(roomForm.price),
+          mealType: roomForm.mealType
+        });
+        setRooms(rooms.map(r => r.id === roomForm.id ? mapRoom(res.data) : r));
+        showToast('Room updated successfully!');
+      } else {
+        // Add mode — need propertyId
+        if (!propertyId) {
+          showToast('Save property details first before adding rooms.', 'error');
+          return;
+        }
+        const res = await addRoom({
+          propertyId,
+          roomName: roomForm.name,
+          totalRooms: parseInt(roomForm.totalRooms),
+          pricePerNight: parseFloat(roomForm.price),
+          mealType: roomForm.mealType
+        });
+        const newRoom = mapRoom(res.data);
+        setRooms(prev => [...prev, newRoom]);
+        // Update booking form dropdown with first room if empty
+        if (rooms.length === 0) {
+          setBookingForm(prev => ({ ...prev, roomType: newRoom.name, roomId: newRoom.id }));
+        }
+        showToast('Room setup added successfully!');
+      }
+      setRoomForm({ id: null, name: '', totalRooms: '', price: '', mealType: 'Only Room' });
+    } catch (err) {
+      showToast(err.message || 'Failed to save room.', 'error');
     }
-
-    // Reset form
-    setRoomForm({ id: null, name: '', totalRooms: '', price: '', mealType: 'Only Room' });
   };
 
   const handleEditRoom = (room) => {
@@ -123,112 +277,95 @@ export default function DashboardPage() {
     });
   };
 
-  const handleDeleteRoom = (id) => {
-    setRooms(rooms.filter(r => r.id !== id));
-    showToast("Room configuration deleted.", "success");
+  const handleDeleteRoom = async (id) => {
+    try {
+      await deleteRoom(id);
+      setRooms(rooms.filter(r => r.id !== id));
+      showToast('Room configuration deleted.', 'success');
+    } catch (err) {
+      showToast(err.message || 'Failed to delete room.', 'error');
+    }
   };
 
-  // 4. Block Room / Booking State
-  const [bookingForm, setBookingForm] = useState({
-    guestName: '',
-    guestContact: '',
-    checkIn: '',
-    nights: 1,
-    checkout: '',
-    roomType: 'Deluxe Room',
-    rooms: 1,
-    notes: ''
-  });
+  // ══════════════════════════════════════════════════════════════════════════
+  // BLOCK ROOM / BOOKING
+  // ══════════════════════════════════════════════════════════════════════════
+  const handleRoomTypeChange = (e) => {
+    const selectedName = e.target.value;
+    const selectedRoom = rooms.find(r => r.name === selectedName);
+    setBookingForm(prev => ({
+      ...prev,
+      roomType: selectedName,
+      roomId: selectedRoom ? selectedRoom.id : ''
+    }));
+  };
 
-  // Calculate checkout date auto-populated on checkin or nights change
-  useEffect(() => {
-    if (bookingForm.checkIn && bookingForm.nights > 0) {
-      const checkInDate = new Date(bookingForm.checkIn);
-      const checkoutDate = new Date(checkInDate.getTime() + bookingForm.nights * 24 * 60 * 60 * 1000);
-      const yyyy = checkoutDate.getFullYear();
-      const mm = String(checkoutDate.getMonth() + 1).padStart(2, '0');
-      const dd = String(checkoutDate.getDate()).padStart(2, '0');
-      setBookingForm(prev => ({
-        ...prev,
-        checkout: `${yyyy}-${mm}-${dd}`
-      }));
-    } else {
-      setBookingForm(prev => ({ ...prev, checkout: '' }));
-    }
-  }, [bookingForm.checkIn, bookingForm.nights]);
-
-  // Initial Bookings list
-  const [bookings, setBookings] = useState([
-    {
-      id: 'b1',
-      guestName: 'Rohan Sharma',
-      contact: '+91 98765 43210',
-      roomType: 'Deluxe Room',
-      checkIn: '2026-06-28',
-      checkout: '2026-06-30',
-      nights: 2,
-      rooms: 1,
-      status: 'Blocked'
-    },
-    {
-      id: 'b2',
-      guestName: 'Aishwarya Sen',
-      contact: '+91 98123 45678',
-      roomType: 'Cottage',
-      checkIn: '2026-07-02',
-      checkout: '2026-07-07',
-      nights: 5,
-      rooms: 1,
-      status: 'Active'
-    }
-  ]);
-
-  const handleBlockRoom = (e) => {
+  const handleBlockRoom = async (e) => {
     e.preventDefault();
     if (!bookingForm.guestName || !bookingForm.guestContact || !bookingForm.checkIn) {
-      showToast("Please fill in basic guest details and check-in date.", "error");
+      showToast('Please fill in basic guest details and check-in date.', 'error');
+      return;
+    }
+    if (!propertyId || !bookingForm.roomId) {
+      showToast('Property or room data not loaded. Please refresh.', 'error');
       return;
     }
 
-    const newBooking = {
-      id: `b-${Date.now()}`,
-      guestName: bookingForm.guestName,
-      contact: bookingForm.guestContact,
-      roomType: bookingForm.roomType,
-      checkIn: bookingForm.checkIn,
-      checkout: bookingForm.checkout,
-      nights: parseInt(bookingForm.nights),
-      rooms: parseInt(bookingForm.rooms),
-      status: 'Blocked'
-    };
+    try {
+      const res = await createBooking({
+        propertyId,
+        roomId: bookingForm.roomId,
+        guestName: bookingForm.guestName,
+        guestContact: bookingForm.guestContact,
+        checkInDate: bookingForm.checkIn,
+        nights: parseInt(bookingForm.nights),
+        roomsBooked: parseInt(bookingForm.rooms),
+        notes: bookingForm.notes,
+        status: 'Blocked'
+      });
 
-    setBookings([newBooking, ...bookings]);
-    showToast("Booking blocked successfully!");
+      setBookings(prev => [mapBooking(res.data), ...prev]);
+      showToast('Booking blocked successfully!');
 
-    // Reset booking form
-    setBookingForm({
-      guestName: '',
-      guestContact: '',
-      checkIn: '',
-      nights: 1,
-      checkout: '',
-      roomType: rooms[0]?.name || 'Deluxe Room',
-      rooms: 1,
-      notes: ''
-    });
+      setBookingForm({
+        guestName: '',
+        guestContact: '',
+        checkIn: '',
+        nights: 1,
+        checkout: '',
+        roomType: rooms[0]?.name || '',
+        roomId: rooms[0]?.id || '',
+        rooms: 1,
+        notes: ''
+      });
+    } catch (err) {
+      showToast(err.message || 'Failed to block booking.', 'error');
+    }
   };
 
-  // 5. Link copy state
-  const [copied, setCopied] = useState(false);
+  // ══════════════════════════════════════════════════════════════════════════
+  // COPY PUBLIC LINK
+  // ══════════════════════════════════════════════════════════════════════════
   const handleCopyLink = () => {
     const publicLink = `${window.location.origin}/property/sunrise-homestay`;
     navigator.clipboard.writeText(publicLink);
     setCopied(true);
-    showToast("Link copied to clipboard!");
+    showToast('Link copied to clipboard!');
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // LOGOUT
+  // ══════════════════════════════════════════════════════════════════════════
+  const handleLogOut = () => {
+    logout();
+    showToast('Logged out successfully!', 'success');
+    setTimeout(() => navigate('/login'), 1000);
+  };
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // RENDER
+  // ══════════════════════════════════════════════════════════════════════════
   return (
     <div className="space-y-8 pb-16 max-w-7xl mx-auto">
 
@@ -249,7 +386,10 @@ export default function DashboardPage() {
             Hello, Owner 👋
           </h1>
           <p className="text-slate-500 text-sm mt-1">
-            Property: <span className="font-semibold text-slate-800">{property.name || "Unnamed Property"}</span> &bull; {property.region}, {property.state}
+            {propertyLoading
+              ? 'Loading property...'
+              : <>Property: <span className="font-semibold text-slate-800">{property.name || 'Unnamed Property'}</span> &bull; {property.region}, {property.state}</>
+            }
           </p>
         </div>
 
@@ -262,13 +402,13 @@ export default function DashboardPage() {
             <span>Copy Public Link</span>
           </button>
 
-          <div
-            className="h-10 w-10 rounded-full bg-blue-600 text-white font-bold text-sm flex items-center justify-center border border-blue-500 shadow-sm cursor-pointer">
+          <div className="h-10 w-10 rounded-full bg-blue-600 text-white font-bold text-sm flex items-center justify-center border border-blue-500 shadow-sm cursor-pointer">
             OW
           </div>
           <div
             onClick={handleLogOut}
-            className="h-10 min-w-20 rounded-full bg-red-600 text-white font-bold text-sm flex items-center justify-center border border-red-500 shadow-sm cursor-pointer hover:bg-red-500 active:bg-red-900">
+            className="h-10 min-w-20 rounded-full bg-red-600 text-white font-bold text-sm flex items-center justify-center border border-red-500 shadow-sm cursor-pointer hover:bg-red-500 active:bg-red-900 px-4"
+          >
             Logout
           </div>
         </div>
@@ -292,95 +432,102 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <form onSubmit={handlePropertySave} className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Property Name</label>
-                <input
-                  type="text"
-                  value={property.name}
-                  onChange={(e) => setProperty({ ...property, name: e.target.value })}
-                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  required
-                />
+            {propertyLoading ? (
+              <div className="flex items-center justify-center py-8 text-slate-400 gap-2">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span className="text-sm">Loading property details...</span>
               </div>
+            ) : (
+              <form onSubmit={handlePropertySave} className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Property Name</label>
+                  <input
+                    type="text"
+                    value={property.name}
+                    onChange={(e) => setProperty({ ...property, name: e.target.value })}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    required
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Email ID</label>
-                <input
-                  type="email"
-                  value={property.email}
-                  onChange={(e) => setProperty({ ...property, email: e.target.value })}
-                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  required
-                />
-              </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Email ID</label>
+                  <input
+                    type="email"
+                    value={property.email}
+                    onChange={(e) => setProperty({ ...property, email: e.target.value })}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    required
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Contact Number</label>
-                <input
-                  type="text"
-                  value={property.contact}
-                  onChange={(e) => setProperty({ ...property, contact: e.target.value })}
-                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  required
-                />
-              </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Contact Number</label>
+                  <input
+                    type="text"
+                    value={property.contact}
+                    onChange={(e) => setProperty({ ...property, contact: e.target.value })}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    required
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">WhatsApp Number</label>
-                <input
-                  type="text"
-                  value={property.whatsapp}
-                  onChange={(e) => setProperty({ ...property, whatsapp: e.target.value })}
-                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                />
-              </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">WhatsApp Number</label>
+                  <input
+                    type="text"
+                    value={property.whatsapp}
+                    onChange={(e) => setProperty({ ...property, whatsapp: e.target.value })}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">State (India)</label>
-                <select
-                  value={property.state}
-                  onChange={(e) => setProperty({ ...property, state: e.target.value })}
-                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
-                >
-                  {INDIAN_STATES.map((st) => (
-                    <option key={st} value={st}>{st}</option>
-                  ))}
-                </select>
-              </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">State (India)</label>
+                  <select
+                    value={property.state}
+                    onChange={(e) => setProperty({ ...property, state: e.target.value })}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
+                  >
+                    {INDIAN_STATES.map((st) => (
+                      <option key={st} value={st}>{st}</option>
+                    ))}
+                  </select>
+                </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Region / City</label>
-                <input
-                  type="text"
-                  value={property.region}
-                  onChange={(e) => setProperty({ ...property, region: e.target.value })}
-                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  required
-                />
-              </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Region / City</label>
+                  <input
+                    type="text"
+                    value={property.region}
+                    onChange={(e) => setProperty({ ...property, region: e.target.value })}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    required
+                  />
+                </div>
 
-              <div className="md:col-span-2">
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Address</label>
-                <input
-                  type="text"
-                  value={property.address}
-                  onChange={(e) => setProperty({ ...property, address: e.target.value })}
-                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  required
-                />
-              </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Address</label>
+                  <input
+                    type="text"
+                    value={property.address}
+                    onChange={(e) => setProperty({ ...property, address: e.target.value })}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    required
+                  />
+                </div>
 
-              <div className="md:col-span-2 flex justify-end pt-2">
-                <button
-                  type="submit"
-                  className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-5 rounded-xl text-sm shadow-xs transition-colors cursor-pointer"
-                >
-                  <Save className="h-4 w-4" />
-                  <span>Save Property</span>
-                </button>
-              </div>
-            </form>
+                <div className="md:col-span-2 flex justify-end pt-2">
+                  <button
+                    type="submit"
+                    className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-5 rounded-xl text-sm shadow-xs transition-colors cursor-pointer"
+                  >
+                    <Save className="h-4 w-4" />
+                    <span>Save Property</span>
+                  </button>
+                </div>
+              </form>
+            )}
           </section>
 
           {/* SECTION 2: Room Setup */}
@@ -460,57 +607,69 @@ export default function DashboardPage() {
                   type="submit"
                   className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-5 rounded-xl text-sm shadow-xs transition-colors cursor-pointer"
                 >
-                  <span>{roomForm.id ? "Update Room" : "Add Room"}</span>
+                  <span>{roomForm.id ? 'Update Room' : 'Add Room'}</span>
                 </button>
               </div>
             </form>
 
-            {/* Room list layout */}
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-100 text-left">
-                    <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Room Name</th>
-                    <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Total Rooms</th>
-                    <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Price (Per Night)</th>
-                    <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Meal Type</th>
-                    <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {rooms.map((room) => (
-                    <tr key={room.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="py-4 text-sm font-semibold text-slate-800">{room.name}</td>
-                      <td className="py-4 text-sm text-slate-600">{room.totalRooms} Rooms</td>
-                      <td className="py-4 text-sm text-slate-600 font-medium">₹{room.price}</td>
-                      <td className="py-4">
-                        <span className="inline-block bg-slate-100 text-slate-600 text-xs px-2.5 py-1 rounded-full font-medium border border-slate-200">
-                          {room.mealType}
-                        </span>
-                      </td>
-                      <td className="py-4 text-right">
-                        <div className="flex items-center justify-end space-x-2">
-                          <button
-                            onClick={() => handleEditRoom(room)}
-                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                            title="Edit"
-                          >
-                            <Edit3 className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteRoom(room.id)}
-                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                            title="Delete"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
+            {/* Room list */}
+            {roomsLoading ? (
+              <div className="flex items-center justify-center py-6 text-slate-400 gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Loading rooms...</span>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-left">
+                      <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Room Name</th>
+                      <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Total Rooms</th>
+                      <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Price (Per Night)</th>
+                      <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Meal Type</th>
+                      <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {rooms.map((room) => (
+                      <tr key={room.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="py-4 text-sm font-semibold text-slate-800">{room.name}</td>
+                        <td className="py-4 text-sm text-slate-600">{room.totalRooms} Rooms</td>
+                        <td className="py-4 text-sm text-slate-600 font-medium">₹{room.price}</td>
+                        <td className="py-4">
+                          <span className="inline-block bg-slate-100 text-slate-600 text-xs px-2.5 py-1 rounded-full font-medium border border-slate-200">
+                            {room.mealType}
+                          </span>
+                        </td>
+                        <td className="py-4 text-right">
+                          <div className="flex items-center justify-end space-x-2">
+                            <button
+                              onClick={() => handleEditRoom(room)}
+                              className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                              title="Edit"
+                            >
+                              <Edit3 className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteRoom(room.id)}
+                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                              title="Delete"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {rooms.length === 0 && (
+                  <div className="text-center py-8 text-slate-400 text-sm">
+                    No rooms added yet. Use the form above to add your first room.
+                  </div>
+                )}
+              </div>
+            )}
           </section>
         </div>
 
@@ -594,7 +753,7 @@ export default function DashboardPage() {
                   <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Room Type</label>
                   <select
                     value={bookingForm.roomType}
-                    onChange={(e) => setBookingForm({ ...bookingForm, roomType: e.target.value })}
+                    onChange={handleRoomTypeChange}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
                   >
                     {rooms.map((room) => (
@@ -656,7 +815,7 @@ export default function DashboardPage() {
               className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2.5 rounded-xl text-sm transition-all border border-slate-200 flex items-center justify-center space-x-2 cursor-pointer"
             >
               {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4 text-slate-500" />}
-              <span>{copied ? "Copied!" : "Copy Link"}</span>
+              <span>{copied ? 'Copied!' : 'Copy Link'}</span>
             </button>
           </section>
 
@@ -680,49 +839,56 @@ export default function DashboardPage() {
           </span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="border-b border-slate-100 text-left">
-                <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Guest Details</th>
-                <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Room Type</th>
-                <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Check-in</th>
-                <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Checkout</th>
-                <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider text-center">Nights</th>
-                <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider text-center">Rooms</th>
-                <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {bookings.map((b) => (
-                <tr key={b.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="py-4">
-                    <div className="font-semibold text-slate-800 text-sm">{b.guestName}</div>
-                    <div className="text-slate-400 text-xs mt-0.5">{b.contact}</div>
-                  </td>
-                  <td className="py-4 text-slate-600 text-sm font-medium">{b.roomType}</td>
-                  <td className="py-4 text-slate-600 text-sm">{b.checkIn}</td>
-                  <td className="py-4 text-slate-600 text-sm">{b.checkout}</td>
-                  <td className="py-4 text-slate-600 text-sm text-center font-medium">{b.nights}</td>
-                  <td className="py-4 text-slate-600 text-sm text-center font-medium">{b.rooms}</td>
-                  <td className="py-4 text-right">
-                    <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full border ${b.status === 'Active'
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      : 'bg-blue-50 text-blue-700 border-blue-200'
-                      }`}>
-                      {b.status}
-                    </span>
-                  </td>
+        {bookingsLoading ? (
+          <div className="flex items-center justify-center py-8 text-slate-400 gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm">Loading bookings...</span>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b border-slate-100 text-left">
+                  <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Guest Details</th>
+                  <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Room Type</th>
+                  <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Check-in</th>
+                  <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider">Checkout</th>
+                  <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider text-center">Nights</th>
+                  <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider text-center">Rooms</th>
+                  <th className="pb-3 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          {bookings.length === 0 && (
-            <div className="text-center py-8 text-slate-400 text-sm">
-              No reservation details found.
-            </div>
-          )}
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {bookings.map((b) => (
+                  <tr key={b.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="py-4">
+                      <div className="font-semibold text-slate-800 text-sm">{b.guestName}</div>
+                      <div className="text-slate-400 text-xs mt-0.5">{b.contact}</div>
+                    </td>
+                    <td className="py-4 text-slate-600 text-sm font-medium">{b.roomType}</td>
+                    <td className="py-4 text-slate-600 text-sm">{b.checkIn}</td>
+                    <td className="py-4 text-slate-600 text-sm">{b.checkout}</td>
+                    <td className="py-4 text-slate-600 text-sm text-center font-medium">{b.nights}</td>
+                    <td className="py-4 text-slate-600 text-sm text-center font-medium">{b.rooms}</td>
+                    <td className="py-4 text-right">
+                      <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full border ${b.status === 'Active'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-blue-50 text-blue-700 border-blue-200'
+                        }`}>
+                        {b.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {bookings.length === 0 && (
+              <div className="text-center py-8 text-slate-400 text-sm">
+                No reservation details found.
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
     </div>

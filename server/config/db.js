@@ -2,11 +2,12 @@ import mongoose from 'mongoose';
 
 export const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/homestay_inventory');
+    const uri = process.env.MONGODB_URI;
+    // console.log(process.env.MONGODB_URI)
+    const conn = await mongoose.connect(uri);
     console.log(`MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
     console.error(`MongoDB Connection Error: ${error.message}`);
-    console.log('Ensure MongoDB local service is running or check the MONGO_URI in server/.env');
-    // We don't exit process so server can still serve health check or run basic setup
+    console.error('Ensure MongoDB service is running or check the MONGODB_URI in server/.env');
   }
 };
